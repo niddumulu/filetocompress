@@ -109,6 +109,7 @@
   <input type="file" id="inputFile" style="display: none;" />
 
   <progress id="progressBar" value="0" max="100" style="display: none;"></progress>
+  <div id="fileInfo" style="font-size: 0.85rem; margin-bottom: 1rem;"></div>
 
   <div class="button-group">
     <button onclick="compressFile()">Compress</button>
@@ -138,6 +139,7 @@
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('inputFile');
     const progressBar = document.getElementById('progressBar');
+    const fileInfo = document.getElementById('fileInfo');
     const messageBox = document.getElementById('message');
 
     function showMessage(text, success = true) {
@@ -148,7 +150,13 @@
       messageBox.textContent = text;
     }
 
-    // Handle drag-drop events
+    function formatBytes(bytes) {
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      if (bytes === 0) return '0 Byte';
+      const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+      return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
+    }
+
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -159,31 +167,37 @@
       e.preventDefault();
       dropZone.classList.remove('dragover');
       fileInput.files = e.dataTransfer.files;
+      handleFile();
     });
 
-    function compressFile() {
+    fileInput.addEventListener('change', handleFile);
+
+    function handleFile() {
       const file = fileInput.files[0];
-      if (!file) return showMessage('Please select or drop a file first!', false);
+      if (!file) return showMessage('No file selected', false);
 
       const reader = new FileReader();
 
       reader.onloadstart = () => {
         progressBar.style.display = 'block';
         progressBar.value = 0;
+        fileInfo.textContent = `Reading: ${file.name} (${formatBytes(file.size)})`;
       };
 
       reader.onprogress = (e) => {
         if (e.lengthComputable) {
-          progressBar.value = (e.loaded / e.total) * 100;
+          const percent = Math.round((e.loaded / e.total) * 100);
+          progressBar.value = percent;
         }
       };
 
       reader.onloadend = () => {
         const compressed = pako.gzip(new Uint8Array(reader.result));
-        const base64 = btoa(JSON.stringify({ name: file.name, data: compressed }));
+        const base64 = btoa(JSON.stringify({ name: file.name, data: Array.from(compressed) }));
         document.getElementById('dataBox').value = base64;
         progressBar.style.display = 'none';
-        showMessage('File compressed successfully!');
+        fileInfo.textContent = `Compressed: ${file.name} (${formatBytes(file.size)} → ${formatBytes(compressed.length)})`;
+        showMessage('File compressed automatically!');
       };
 
       reader.onerror = () => {
@@ -194,13 +208,21 @@
       reader.readAsArrayBuffer(file);
     }
 
+    function compressFile() {
+      if (!fileInput.files.length) {
+        return showMessage("Please select or drop a file first!", false);
+      }
+      handleFile();
+    }
+
     function decompressFile() {
       const input = document.getElementById('dataBox').value;
       if (!input) return showMessage('Paste compressed data first!', false);
 
       try {
         const { name, data } = JSON.parse(atob(input));
-        const decompressed = pako.ungzip(data);
+        const byteArray = new Uint8Array(data);
+        const decompressed = pako.ungzip(byteArray);
         const blob = new Blob([decompressed]);
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -208,7 +230,7 @@
         a.click();
         showMessage('File decompressed and downloaded!');
       } catch (e) {
-        showMessage('Decompression error: ' + e, false);
+        showMessage('Decompression error: ' + e.message, false);
       }
     }
 
