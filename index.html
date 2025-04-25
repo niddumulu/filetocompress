@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>📦 File Compression & Decompression</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      padding: 2rem;
+      max-width: 700px;
+      margin: auto;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+      color: #2c3e50;
+    }
+
+    .drop-zone {
+      border: 2px dashed #aaa;
+      padding: 2rem;
+      text-align: center;
+      color: #666;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      transition: background 0.3s;
+    }
+
+    .drop-zone.dragover {
+      background: #ecf0f1;
+    }
+
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #2980b9;
+    }
+
+    textarea {
+      width: 100%;
+      height: 250px;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.9rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+
+    progress {
+      width: 100%;
+      height: 16px;
+      margin-bottom: 1rem;
+    }
+
+    #message {
+      padding: 0.75rem 1rem;
+      border-radius: 5px;
+      background: #ecf0f1;
+      margin-bottom: 1rem;
+      display: none;
+    }
+
+    .instructions {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      padding: 1rem;
+      border-radius: 5px;
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 600px) {
+      .button-group {
+        flex-direction: column;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📦 File Compression & Decompression</h1>
+
+  <div class="drop-zone" id="dropZone">Drag & Drop file here or click to browse</div>
+  <input type="file" id="inputFile" style="display: none;" />
+
+  <progress id="progressBar" value="0" max="100" style="display: none;"></progress>
+
+  <div class="button-group">
+    <button onclick="compressFile()">Compress</button>
+    <button onclick="decompressFile()">Decompress</button>
+    <button onclick="copyToClipboard()">Copy</button>
+    <button onclick="pasteFromClipboard()">Paste</button>
+    <button onclick="clearTextarea()">Clear</button>
+  </div>
+
+  <div id="message"></div>
+
+  <textarea id="dataBox" placeholder="Upload file, compress & copy. Or paste data here to decompress."></textarea>
+
+  <div class="instructions">
+    <h2>📋 Petunjuk Penggunaan:</h2>
+    <ul>
+      <li><strong>Upload File:</strong> Klik area "Drag & Drop" atau seret file ke sana.</li>
+      <li><strong>Kompres File:</strong> Klik tombol "Compress" untuk mengubah file menjadi Base64.</li>
+      <li><strong>Salin Hasil:</strong> Klik tombol "Copy" untuk menyalin data Base64 ke clipboard.</li>
+      <li><strong>Tempel Data:</strong> Klik tombol "Paste" untuk menempelkan data dari clipboard.</li>
+      <li><strong>Dekompres File:</strong> Klik tombol "Decompress" untuk mengembalikan file.</li>
+      <li><strong>Kosongkan Kolom:</strong> Klik tombol "Clear" untuk menghapus isi kolom teks.</li>
+    </ul>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('inputFile');
+    const progressBar = document.getElementById('progressBar');
+    const messageBox = document.getElementById('message');
+
+    function showMessage(text, success = true) {
+      messageBox.style.display = 'block';
+      messageBox.style.background = success ? '#d4edda' : '#f8d7da';
+      messageBox.style.color = success ? '#155724' : '#721c24';
+      messageBox.style.border = success ? '1px solid #c3e6cb' : '1px solid #f5c6cb';
+      messageBox.textContent = text;
+    }
+
+    // Handle drag-drop events
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      fileInput.files = e.dataTransfer.files;
+    });
+
+    function compressFile() {
+      const file = fileInput.files[0];
+      if (!file) return showMessage('Please select or drop a file first!', false);
+
+      const reader = new FileReader();
+
+      reader.onloadstart = () => {
+        progressBar.style.display = 'block';
+        progressBar.value = 0;
+      };
+
+      reader.onprogress = (e) => {
+        if (e.lengthComputable) {
+          progressBar.value = (e.loaded / e.total) * 100;
+        }
+      };
+
+      reader.onloadend = () => {
+        const compressed = pako.gzip(new Uint8Array(reader.result));
+        const base64 = btoa(JSON.stringify({ name: file.name, data: compressed }));
+        document.getElementById('dataBox').value = base64;
+        progressBar.style.display = 'none';
+        showMessage('File compressed successfully!');
+      };
+
+      reader.onerror = () => {
+        progressBar.style.display = 'none';
+        showMessage('Error reading file.', false);
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+
+    function decompressFile() {
+      const input = document.getElementById('dataBox').value;
+      if (!input) return showMessage('Paste compressed data first!', false);
+
+      try {
+        const { name, data } = JSON.parse(atob(input));
+        const decompressed = pako.ungzip(data);
+        const blob = new Blob([decompressed]);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.click();
+        showMessage('File decompressed and downloaded!');
+      } catch (e) {
+        showMessage('Decompression error: ' + e, false);
+      }
+    }
+
+    function copyToClipboard() {
+      const text = document.getElementById('dataBox').value;
+      if (!text) return showMessage('Nothing to copy.', false);
+      navigator.clipboard.writeText(text)
+        .then(() => showMessage('Copied to clipboard!'))
+        .catch(err => showMessage('Copy error: ' + err, false));
+    }
+
+    function pasteFromClipboard() {
+      navigator.clipboard.readText()
+        .then(text => {
+          document.getElementById('dataBox').value = text;
+          showMessage('Pasted from clipboard!');
+        })
+        .catch(err => showMessage('Paste error: ' + err, false));
+    }
+
+    function clearTextarea() {
+      document.getElementById('dataBox').value = '';
+      showMessage('Textarea cleared.');
+    }
+  </script>
+
+</body>
+</html>
